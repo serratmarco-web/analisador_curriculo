@@ -10,31 +10,30 @@ app.use(express.json({ limit: '2mb' }));
 app.get('/', (req, res) => res.json({ status: 'ok' }));
 
 app.post('/analyze', async (req, res) => {
-  const { messages, max_tokens } = req.body;
+  const { prompt } = req.body;
+  if (!prompt) return res.status(400).json({ error: 'prompt obrigatório' });
 
-  if (!messages) return res.status(400).json({ error: 'messages obrigatório' });
-
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'API key não configurada' });
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type':      'application/json',
-        'x-api-key':         apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model:      'claude-sonnet-4-20250514',
-        max_tokens: max_tokens || 1000,
-        messages,
-      }),
-    });
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.4, maxOutputTokens: 2048 }
+        })
+      }
+    );
 
     const data = await response.json();
     if (!response.ok) return res.status(response.status).json({ error: data?.error?.message });
-    res.json(data);
+
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    res.json({ text });
 
   } catch (err) {
     res.status(500).json({ error: 'Erro interno no proxy.' });
